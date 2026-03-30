@@ -1,0 +1,20 @@
+{
+  "name": "dashen-bot",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@google/generative-ai": "^0.24.1",
+    "@supabase/supabase-js": "^2.100.1",
+    "dotenv": "^17.3.1",
+    "node-cron": "^4.2.1",
+    "telegraf": "^4.16.3"
+  }
+}
