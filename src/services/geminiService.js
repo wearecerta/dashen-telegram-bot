@@ -4,7 +4,7 @@ import Groq from "groq-sdk";
 
 // primary llm
 const genAI = new GoogleGenerativeAI(config.geminiApiKey);
-const MODEL_NAME = "gemini-2.5-flash-lite"; 
+const MODEL_NAME = "gemini-2.5-flash-lite-preview-09-2025"; 
 
 // fallback 
 const groq = new Groq({ apiKey: config.groqApiKey });
