@@ -1,14 +1,21 @@
 import {
   createEvent,
   getLatestEvent,
-  getEventConfirmations
+  getEventConfirmations,
+  getEventById,
+  deleteEvent
 } from "../db/model.js";
+import { EVENT_CANCELLED_RESPONSES } from "../responses/response.js";
 
-import { setCurrentEvent } from "../services/reminderServices.js";
+import { 
+  setCurrentEvent, 
+  clearCurrentEvent, 
+  getCurrentEventId 
+} from "../services/reminderServices.js";
 
-//
-// 📅 CREATE EVENT
-//
+
+// CREATE EVENT
+
 export async function handleEvent(ctx) {
   const input = ctx.message.text.split(" ").slice(1);
 
@@ -29,13 +36,17 @@ export async function handleEvent(ctx) {
   setCurrentEvent(event.id);
 
   await ctx.reply(
-    `📅 Event Created!\n\nTitle: ${title}\nDate: ${date}\n\nEveryone can now confirm or make excuses 😄`
+    `📅 **Event Created!**\n\n` +
+    `**Title:** ${title}\n` +
+    `**Date:** ${date}\n\n` +
+    `Everyone can now confirm or make excuses 😄\n\n` +
+    `*Admins can use /cancel to cancel this event*`
   );
 }
 
-//
-// 📊 STATUS
-//
+
+//  STATUS
+
 export async function handleStatus(ctx) {
   const event = await getLatestEvent();
 
@@ -48,11 +59,11 @@ export async function handleStatus(ctx) {
   const confirmedNames = confirmations?.map((c) => c.users.name) || [];
   const count = confirmedNames.length;
 
-  let reply = `📋 ${event.title} (${event.event_date})\n\n`;
-  reply += `✅ Confirmed: ${count} people\n`;
+  let reply = `📋 **${event.title}** (${event.event_date})\n\n`;
+  reply += `✅ **Confirmed:** ${count} people\n`;
 
   if (confirmedNames.length > 0) {
-    reply += `\nAttendees:\n${confirmedNames
+    reply += `\n**Attendees:**\n${confirmedNames
       .map((name) => `• ${name}`)
       .join("\n")}`;
   } else {
@@ -62,12 +73,42 @@ export async function handleStatus(ctx) {
   await ctx.reply(reply);
 }
 
-//
-// 🔄 RESET
-//
+
 export async function handleReset(ctx) {
-  setCurrentEvent(null);
+  await clearCurrentEvent(false); 
   await ctx.reply(
-    "🔄 Active event reset. Next /event will create a new one."
+    "🔄 Active event reset. Next /event will create a new one.\n\n" +
+    "Note: The event still exists in the database but is no longer active."
   );
 }
+
+// cancel event and delet from db
+
+export async function handleCancel(ctx) {
+  try {
+    const currentEventId = getCurrentEventId();
+    if (!currentEventId) {
+      return ctx.reply("❌ No active event to cancel!");
+    }
+    
+    // Get event details
+    const event = await getEventById(currentEventId);
+    if (!event) {
+      await clearCurrentEvent(false);
+      return ctx.reply("❌ Event not found. State has been reset.");
+    }
+    
+    // Delete from database AND clear state
+    await clearCurrentEvent(true, currentEventId);
+    
+    
+    const randomMsg = EVENT_CANCELLED_RESPONSES[Math.floor(Math.random() * EVENT_CANCELLED_RESPONSES.length)];
+    await ctx.reply(randomMsg, { parse_mode: "Markdown" });
+    
+    console.log(`✅ Event "${event.title}" (${currentEventId}) cancelled and deleted by: ${ctx.from.first_name}`);
+    
+  } catch (error) {
+    console.error("Error in handleCancel:", error);
+    await ctx.reply("Sorry, couldn't cancel the event. Please try again.");
+  }
+} 

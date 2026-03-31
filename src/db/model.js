@@ -65,9 +65,9 @@ export async function getEventById(id) {
   return data;
 }
 
-//
-// ✅ CONFIRMATION FUNCTIONS
-//
+
+//  CONFIRMATION FUNCTIONS
+
 export async function createConfirmation(userId, eventId) {
   const { data, error } = await supabase
     .from("confirmations")
@@ -110,6 +110,39 @@ export async function getEventConfirmations(eventId) {
 
   if (error) throw error;
   return data;
+}
+
+
+export async function deleteEvent(eventId) {
+  // First delete all confirmations for this event
+  const { error: confirmationsError } = await supabase
+    .from("confirmations")
+    .delete()
+    .eq("event_id", eventId);
+  
+  if (confirmationsError) throw confirmationsError;
+  
+  // Then delete the event
+  const { error: eventError } = await supabase
+    .from("events")
+    .delete()
+    .eq("id", eventId);
+  
+  if (eventError) throw eventError;
+  
+  return true;
+}
+
+
+export async function deleteConfirmation(userId, eventId) {
+  const { error } = await supabase
+    .from("confirmations")
+    .delete()
+    .eq("user_id", userId)
+    .eq("event_id", eventId);
+
+  if (error) throw error;
+  return true;
 }
 
 export async function getConfirmationCount(eventId) {
