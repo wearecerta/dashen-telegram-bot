@@ -40,34 +40,38 @@ export async function handleText(ctx) {
   try {
     if (ctx.message.text.startsWith("/")) return;
 
+    // Get chat ID for isolation
+    const chatId = ctx.message.chat.id.toString();
     const telegramId = ctx.from.id.toString();
     const name = ctx.from.first_name;
     const username = ctx.from.username || name;
     const message = ctx.message.text;
 
-    console.log(`📝 Processing message from ${name}: "${message}"`);
+    console.log(`📝 Processing message in chat ${chatId} from ${name}: "${message}"`);
 
-    const user = await findOrCreateUser(telegramId, name);
+    // Get or create user for this specific chat
+    const user = await findOrCreateUser(telegramId, name, chatId);
 
-    let eventId = getCurrentEventId();
+    // Check if there's an active event for this chat
+    let eventId = getCurrentEventId(chatId);
     let event;
 
     if (eventId) {
       event = await getEventById(eventId);
     } else {
-      event = await getLatestEvent();
-      if (event) setCurrentEvent(event.id);
+      event = await getLatestEvent(chatId);
+      if (event) setCurrentEvent(event.id, chatId);
     }
 
     if (event) {
-      await handleEventResponse(ctx, user, event, message, name, username);
+      await handleEventResponse(ctx, user, event, message, name, username, chatId);
       return;
     }
 
     const isProposing = await detectProposal(message, name);
     
     if (isProposing) {
-      await handleProposal(ctx, user, message, name, username);
+      await handleProposal(ctx, user, message, name, username, chatId);
     }
     
   } catch (error) {
@@ -97,12 +101,40 @@ async function detectProposal(message, name) {
   }
 }
 
-async function handleProposal(ctx, user, message, name, username) {
+async function handleProposal(ctx, user, message, name, username, chatId) {
   try {
-   const activity = message
+    let activity = message;
+    
+    // Better extraction of activity
+    const proposalPhrases = [
+      /^let's\s+/i,
+      /^lets\s+/i,
+      /^let us\s+/i,
+      /^how about\s+/i,
+      /^want to\s+/i,
+      /^wanna\s+/i,
+      /^shall we\s+/i
+    ];
+    
+    for (const pattern of proposalPhrases) {
+      activity = activity.replace(pattern, '');
+    }
+    
+    activity = activity.trim();
+    activity = activity.replace(/^[,\s]+/, '');
+    activity = activity.replace(/[?.,!]$/, '');
+    
+    if (activity.length > 0) {
+      activity = activity.charAt(0).toUpperCase() + activity.slice(1);
+    }
+    
+    if (activity.length < 2) {
+      activity = "hang out";
+    }
+    
     const today = new Date().toISOString().split('T')[0];
-    const event = await createEvent(activity, today);
-    setCurrentEvent(event.id);
+    const event = await createEvent(activity, today, chatId);
+    setCurrentEvent(event.id, chatId);
     
     // Proposer automatically confirms
     await createConfirmation(user.id, event.id);
@@ -115,7 +147,6 @@ async function handleProposal(ctx, user, message, name, username) {
     
     const responseText = `${funnyIntro}\n\nWhat Do you Think Guys?`;
     
-    // Send with only Status and Cancel buttons
     await safeSend(ctx, responseText, getAfterCreationKeyboard(event.id));
     
     activeProposal = {
@@ -131,13 +162,12 @@ async function handleProposal(ctx, user, message, name, username) {
   }
 }
 
-async function handleEventResponse(ctx, user, event, message, name, username) {
+async function handleEventResponse(ctx, user, event, message, name, username, chatId) {
   try {
     let existingConfirmation;
     try {
       existingConfirmation = await getUserConfirmation(user.id, event.id);
     } catch (error) {
-      console.error("Error checking confirmation:", error);
       existingConfirmation = null;
     }
     
@@ -145,64 +175,44 @@ async function handleEventResponse(ctx, user, event, message, name, username) {
     try {
       analysis = await analyzeMessageGemini(message, name);
     } catch (error) {
-      console.error("LLM analysis error:", error);
       analysis = getFallbackAnalysis(message, name);
     }
     
     const allConfirmations = await getEventConfirmations(event.id);
     const confirmedUserIds = new Set(allConfirmations?.map(c => c.user_id) || []);
     const confirmedCount = confirmedUserIds.size;
-    const totalUsers = (await getAllUsers()).length;
+    const totalUsers = (await getAllUsers(chatId)).length;
     
-    // CONFIRMING  Auto confirm and respond with vibe
     if (analysis.intent === "CONFIRMING" && !existingConfirmation) {
       await createConfirmation(user.id, event.id);
       const newCount = confirmedCount + 1;
       
-      let vibeResponse;
-      if (newCount === totalUsers && totalUsers > 1) {
-        vibeResponse = getRandomResponse(EVERYONE_CONFIRMED_RESPONSES, { username });
-      } else {
-        vibeResponse = getRandomResponse(CONFIRMATION_RESPONSES, { username });
-      }
-      
+      // let vibeResponse;
+      // if (newCount === totalUsers && totalUsers > 1) {
+      //   vibeResponse = getRandomResponse(EVERYONE_CONFIRMED_RESPONSES, { username });
+      // } else {
+      //   vibeResponse = getRandomResponse(CONFIRMATION_RESPONSES, { username });
+      // }
+      const vibeResponse = analysis.response;
       const responseText = `${vibeResponse}\n\n✅ *${escapeMarkdown(name)}* confirmed!\n\n📊 *${newCount} people confirmed so far* 🎉`;
-      
       await safeSend(ctx, responseText, getEventActionKeyboard(event.id, true));
     } 
-    // EXCUSE - Auto respond with funny block
     else if (analysis.intent === "EXCUSE" && !existingConfirmation) {
-      const funnyBlock = getRandomResponse(EXCUSE_BLOCK_RESPONSES, { username });
-      
+      const funnyBlock = analysis.response/*getRandomResponse(EXCUSE_BLOCK_RESPONSES, { username })*/;
       const responseText = `😏 ${funnyBlock}\n\n*${escapeMarkdown(name)}* tried to escape with: "${escapeMarkdown(message)}"\n\n📊 *${confirmedCount} people are still coming* 🎉`;
-      
       await safeSend(ctx, responseText, getEventActionKeyboard(event.id, false));
     } 
-    // ALREADY CONFIRMED - Let them know they're already in
     else if (existingConfirmation && analysis.intent === "CONFIRMING") {
-      const hypeResponse = getRandomResponse(DOUBLE_CONFIRMATION_RESPONSES, { username });
+      const hypeResponse = analysis.response/* getRandomResponse(DOUBLE_CONFIRMATION_RESPONSES, { username });*/
       const responseText = `${hypeResponse}\n\n*${escapeMarkdown(name)}* is already confirmed! 🔥\n\n📊 *${confirmedCount} people confirmed so far*`;
-      
       await safeSend(ctx, responseText, getEventActionKeyboard(event.id, true));
     }
-    // ALREADY CONFIRMED TRYING TO EXCUSE
     else if (existingConfirmation && analysis.intent === "EXCUSE") {
-      const responseText = getRandomResponse(ALREADY_CONFIRMED_EXCUSE_RESPONSES, {
+      const responseText = analysis.response/*getRandomResponse(ALREADY_CONFIRMED_EXCUSE_RESPONSES, {
         name: escapeMarkdown(name),
         event: escapeMarkdown(event.title)
-      });
-      
+      });*/
       await safeSend(ctx, responseText, getEventActionKeyboard(event.id, true));
-    }
-    // NEUTRAL - Just show status if they ask
-    else if (analysis.intent === "NEUTRAL") {
-      if (message.toLowerCase().includes('status') || message.toLowerCase().includes('who')) {
-        const responseText = 
-          `📅 *${escapeMarkdown(event.title)}* is happening on *${event.event_date}*!\n\n` +
-          `📊 *${confirmedCount} people* confirmed so far! 🎉`;
-        
-        await safeSend(ctx, responseText, getEventActionKeyboard(event.id, existingConfirmation));
-      }
     }
     
   } catch (error) {
@@ -210,3 +220,4 @@ async function handleEventResponse(ctx, user, event, message, name, username) {
     await ctx.reply("Sorry, something went wrong. Please try again.");
   }
 }
+

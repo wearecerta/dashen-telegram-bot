@@ -1,12 +1,14 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { config } from "../config/index.js";
-
-const genAI = new GoogleGenerativeAI(config.geminiApiKey);
-const MODEL_NAME = "gemini-3-flash-preview"; 
-
-// fallback groq
 import Groq from "groq-sdk";
+
+// primary llm
+const genAI = new GoogleGenerativeAI(config.geminiApiKey);
+const MODEL_NAME = "gemini-2.5-flash-lite"; 
+
+// fallback 
 const groq = new Groq({ apiKey: config.groqApiKey });
+const groqModel = "llama-3.3-70b-versatile";
 
 const timeoutPromise = (ms, promise) => {
   return new Promise((resolve, reject) => {
@@ -76,7 +78,7 @@ async function analyzeWithGroq(message, userName) {
         content: prompt
       }
     ],
-    model: "llama-3.1-8b-instant", // Fast Groq model
+    model: groqModel, 
     temperature: 0.7,
     max_tokens: 150,
     response_format: { type: "json_object" }
@@ -89,7 +91,7 @@ async function analyzeWithGroq(message, userName) {
 
 function getAnalysisPrompt(message, userName) {
   return `
-You are analyzing messages in a Telegram group chat.
+You are analyzing messages in a Telegram group chat. The chat might be english or amharic but your response must be in english. Your task is to classify the intent of the message and generate a response based on that intent.
 
 User: ${userName}
 Message: "${message}"
@@ -108,7 +110,7 @@ If NEUTRAL: friendly casual response (max 8 words)
 Return ONLY JSON:
 {
   "intent": "CONFIRMING|EXCUSE|PROPOSAL|NEUTRAL",
-  "response": "your response"
+  "response": "your very funny and roasting based on their excuse response and forcing and convincing them to show up"
 }`;
 }
 

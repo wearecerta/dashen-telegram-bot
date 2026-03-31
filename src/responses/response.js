@@ -1,15 +1,15 @@
 
 
 export const PROPOSAL_INTRO_RESPONSES = [
-  "🎯 *ATTENTION EVERYONE* 🎯\n\n{name} has spoken! {activity} it is!",
-  "👀 *SOMEONE'S PLANNING SOMETHING* 👀\n\n@{username} wants to {activity}!",
-  "📢 *ANNOUNCEMENT* 📢\n\nThe great {activity} has been proposed by {name}!",
-  "✨ *PLANS INCOMING* ✨\n\n{name} is making moves with this {activity} idea!",
-  "🎪 *CIRCUS IS IN TOWN* 🎪\n\n{name} is organizing a {activity}! Everyone gather round!",
-  "🔥 *HOT OFF THE PRESS* 🔥\n\n{name} just proposed: {activity}!",
-  "💫 *MISSION ASSEMBLE* 💫\n\n{name} wants everyone for {activity}!",
-  "🎯 *PLAN ACTIVATED* 🎯\n\n{name} initiated: {activity}. Who's with them?",
-  "🌟 *OPPORTUNITY KNOCKS* 🌟\n\n{name} is setting up a {activity}. Don't miss out!"
+  '🎯 *ATTENTION EVERYONE* 🎯\n\n{name} has spoken! "{activity}"',
+  `👀 *SOMEONE'S PLANNING SOMETHING* 👀\n\n@{username} says "{activity}"!`,
+  `📢 *ANNOUNCEMENT* 📢\n\nThe great "{activity}" has been proposed by {name}!`,
+  '✨ *PLANS INCOMING* ✨\n\n{name} is making moves with "{activity}" idea!',
+  `🎪 *CIRCUS IS IN TOWN* 🎪\n\n{name} is organizing a "{activity}"! Everyone gather round!`,
+  `🔥 *HOT OFF THE PRESS* 🔥\n\n{name} just proposed: "{activity}"!`,
+  `💫 *MISSION ASSEMBLE* 💫\n\n{name} wants everyone for "{activity}"!`,
+  `🎯 *PLAN ACTIVATED* 🎯\n\n{name} initiated: "{activity}". Who's with them?`,
+  `🌟 *OPPORTUNITY KNOCKS* 🌟\n\n{name} is setting up a "{activity}". Don't miss out!`
 ];
 
 // Confirmation Vibe Responses (when someone says yes)
@@ -111,20 +111,20 @@ export const REMINDER_UNCONFIRMED_RESPONSES = [
 
 
 export const EVENT_CANCELLED_RESPONSES = [
-  "🚨 *EVENT CANCELLED!* 🚨\n\n{event} has been called off by {name}.\n\nSee you next time everyone! 👋",
-  "❌ *PLANS CHANGED!* ❌\n\n{event} is no longer happening.\n\n{name} pulled the plug! Better luck next time! 😅",
-  "📢 *UPDATE* 📢\n\n{event} has been cancelled by {name}.\n\nBack to the planning board! 🎯",
-  "💔 *HEARTBREAKING NEWS* 💔\n\n{event} is cancelled!\n\n{name} owes everyone an explanation! 😏",
-  "🎭 *PLOT TWIST* 🎭\n\n{event} has been cancelled by {name}.\n\nWho's organizing the next one? 👀",
-  "⏰ *POSTPONED* ⏰\n\n{event} is cancelled for now.\n\n{name}, you owe us a reschedule! 📅",
-  "😢 *SAD DAY* 😢\n\n{event} has been cancelled.\n\n{name}, we'll remember this! 📝"
+  `🚨 *EVENT CANCELLED!* 🚨\n\n"{event}" has been called off by {name}.\n\nSee you next time everyone! 👋`,
+  `❌ *PLANS CHANGED!* ❌\n\n"{event}" is no longer happening.\n\n{name} pulled the plug! Better luck next time! 😅`,
+  `📢 *UPDATE* 📢\n\n"{event}" has been cancelled by {name}.\n\nBack to the planning board! 🎯`,
+  `💔 *HEARTBREAKING NEWS* 💔\n\n"{event}" is cancelled!\n\n{name} owes everyone an explanation! 😏`,
+  `🎭 *PLOT TWIST* 🎭\n\n"{event}" has been cancelled by {name}.\n\nWho's organizing the next one? 👀`,
+  `⏰ *POSTPONED* ⏰\n\n"{event}" is cancelled for now.\n\n{name}, you owe us a reschedule! 📅`,
+  `😢 *SAD DAY* 😢\n\n"{event}" has been cancelled.\n\n{name}, we'll remember this! 📝`
 ];
 
 export const NO_ACTIVE_EVENT_RESPONSES = [
-  "❌ No active event to cancel! Create one with /event or say 'let's ...' 🎯",
-  "🤔 There's no event happening right now. Start one by proposing an activity!",
-  "📭 Nothing to cancel! Why not organize something new? 🎉",
-  "💭 No active event found. Be the hero and create one! 🦸"
+  `❌ No active event to cancel! Create one with /event or say 'let's ...' 🎯`,
+  `🤔 There's no event happening right now. Start one by proposing an activity!`,
+  `📭 Nothing to cancel! Why not organize something new? 🎉`,
+  `💭 No active event found. Be the hero and create one! 🦸`
 ];
 
 

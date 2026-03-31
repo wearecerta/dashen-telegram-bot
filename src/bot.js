@@ -8,20 +8,20 @@ import {
   handleCancel
 } from "./handlers/commandHandler.js";
 import { findOrCreateUser, getEventById, getEventConfirmations, deleteEvent } from "./db/model.js";
-import { clearCurrentEvent } from "./services/reminderServices.js";
+import { clearCurrentEvent, getCurrentEventId } from "./services/reminderServices.js";
 import { getStatusKeyboard } from "./utils/keyboard.js";
 import { getRandomResponse, EVENT_CANCELLED_RESPONSES } from "./responses/response.js";
 import { escapeMarkdown } from "./utils/helper.js";
 
 export const bot = new Telegraf(config.botToken);
 
-
-
+// Handle /start 
 bot.start(async (ctx) => {
   const name = ctx.from.first_name;
   const telegramId = ctx.from.id.toString();
+  const chatId = ctx.chat.id.toString();
 
-  await findOrCreateUser(telegramId, name);
+  await findOrCreateUser(telegramId, name, chatId);
 
   const keyboard = Markup.inlineKeyboard([
     [
@@ -50,10 +50,17 @@ bot.start(async (ctx) => {
   });
 });
 
-// call back
+// Handle callback queries from buttons
 bot.on("callback_query", async (ctx) => {
   try {
     const callbackData = ctx.callbackQuery.data;
+    const message = ctx.callbackQuery.message;
+    const chatId = message?.chat?.id?.toString();
+    
+    if (!chatId) {
+      await ctx.answerCbQuery("❌ Invalid chat!");
+      return;
+    }
     
     let action = "";
     let eventId = "";
@@ -70,21 +77,21 @@ bot.on("callback_query", async (ctx) => {
       return;
     }
     
-    console.log(`📱 Callback: action=${action}, eventId=${eventId}, from=${ctx.from.first_name} (${ctx.from.id})`);
+    console.log(`📱 Callback in chat ${chatId}: action=${action}, eventId=${eventId}, from=${ctx.from.first_name}`);
     
     if (!eventId || eventId.length < 10) {
       await ctx.answerCbQuery("❌ Invalid event ID!");
       return;
     }
     
-    // Get event
+    // Verify this event belongs to this chat
     let event;
     try {
       event = await getEventById(eventId);
     } catch (error) {
       console.error("Error fetching event:", error);
       await ctx.answerCbQuery("❌ Event not found!");
-      if (ctx.callbackQuery.message) {
+      if (message) {
         await ctx.editMessageText("❌ This event no longer exists.", { parse_mode: "Markdown" });
       }
       return;
@@ -92,17 +99,23 @@ bot.on("callback_query", async (ctx) => {
     
     if (!event) {
       await ctx.answerCbQuery("❌ Event not found!");
-      if (ctx.callbackQuery.message) {
+      if (message) {
         await ctx.editMessageText("❌ This event no longer exists.", { parse_mode: "Markdown" });
       }
       return;
     }
     
-    // Handle CANCEL EVENT - ANYONE can cancel
+    // Verify event belongs to this chat
+    if (event.chat_id !== chatId) {
+      await ctx.answerCbQuery("❌ This event belongs to a different group!");
+      return;
+    }
+    
+    // Handle CANCEL EVENT - Anyone can cancel
     if (action === "cancel_event") {
       // Delete event from database
       await deleteEvent(eventId);
-      await clearCurrentEvent();
+      await clearCurrentEvent(true, chatId, eventId);
       
       const cancelMsg = getRandomResponse(EVENT_CANCELLED_RESPONSES, {
         event: event.title,
@@ -111,16 +124,16 @@ bot.on("callback_query", async (ctx) => {
       
       await ctx.answerCbQuery("🚫 Event cancelled!");
       
-      if (ctx.callbackQuery.message) {
+      if (message) {
         await ctx.editMessageText(cancelMsg, { parse_mode: "Markdown" });
       } else {
         await ctx.reply(cancelMsg, { parse_mode: "Markdown" });
       }
       
-      console.log(`✅ Event "${event.title}" (${eventId}) cancelled and deleted by: ${ctx.from.first_name} (${ctx.from.id})`);
+      console.log(`✅ Event "${event.title}" cancelled in chat ${chatId} by: ${ctx.from.first_name}`);
     }
     
-    // handel status
+    // Handle STATUS action
     else if (action === "status") {
       const confirmations = await getEventConfirmations(eventId);
       const confirmedNames = confirmations?.map(c => c.users.name) || [];
@@ -137,7 +150,7 @@ bot.on("callback_query", async (ctx) => {
       
       await ctx.answerCbQuery();
       
-      const currentText = ctx.callbackQuery.message?.text;
+      const currentText = message?.text;
       if (currentText !== statusMsg) {
         await ctx.editMessageText(statusMsg, {
           parse_mode: "Markdown",
@@ -160,17 +173,17 @@ bot.on("callback_query", async (ctx) => {
   }
 });
 
-// ask to be admin
+// Ask to be admin when added to group
 bot.on("new_chat_members", async (ctx) => {
   const me = await ctx.getChatMember(ctx.botInfo.id);
   if (me.status !== "administrator") {
-    await ctx.reply("⚠️ Make me admin please 🙏");
+    await ctx.reply("⚠️ Please make me an admin so I can work properly 🙏");
   }
 });
 
 bot.catch((err, ctx) => {
   console.error("Bot error:", err);
-  ctx.reply("Error occurred").catch(() => {});
+  ctx.reply("An error occurred. Please try again later.").catch(() => {});
 });
 
 bot.on("text", handleText);
