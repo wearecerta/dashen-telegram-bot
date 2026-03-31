@@ -2,9 +2,12 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 import { config } from "../config/index.js";
 
 const genAI = new GoogleGenerativeAI(config.geminiApiKey);
-const MODEL_NAME = "gemini-3-flash-preview";
+const MODEL_NAME = "gemini-3-flash-preview"; 
 
-// Add timeout promise
+// fallback groq
+import Groq from "groq-sdk";
+const groq = new Groq({ apiKey: config.groqApiKey });
+
 const timeoutPromise = (ms, promise) => {
   return new Promise((resolve, reject) => {
     const timeoutId = setTimeout(() => {
@@ -24,22 +27,72 @@ const timeoutPromise = (ms, promise) => {
   });
 };
 
-export async function analyzeMessage(message, userName = "User") {
+export async function analyzeMessageGemini(message, userName = "User") {
+  // Try Gemini first
   try {
-    // Quick validation
     if (!message || typeof message !== 'string') {
-      console.log("Invalid message for analysis");
       return fallbackResponse();
     }
 
     const trimmedMessage = message.length > 300 ? message.substring(0, 300) + "..." : message;
     const model = genAI.getGenerativeModel({ model: MODEL_NAME });
 
-    const prompt = `
+    const prompt = getAnalysisPrompt(trimmedMessage, userName);
+
+    console.log(`🤖 Sending to Gemini (timeout: 10s)...`);
+    
+    const result = await timeoutPromise(10000, model.generateContent(prompt));
+    const text = result.response.text();
+    
+    console.log(`✅ Gemini response received`);
+    return parseResponse(text);
+    
+  } catch (error) {
+    console.error("Gemini API error:", error.message);
+    console.log("🔄 Falling back to Groq...");
+    
+    // Try Groq as fallback
+    try {
+      return await analyzeWithGroq(message, userName);
+    } catch (groqError) {
+      console.error("Groq API error:", groqError.message);
+      return getSmartFallback(message, userName);
+    }
+  }
+}
+
+async function analyzeWithGroq(message, userName) {
+  const trimmedMessage = message.length > 300 ? message.substring(0, 300) + "..." : message;
+  const prompt = getAnalysisPrompt(trimmedMessage, userName);
+  
+  const completion = await timeoutPromise(10000, groq.chat.completions.create({
+    messages: [
+      {
+        role: "system",
+        content: "You are a helpful assistant that analyzes messages and returns ONLY valid JSON."
+      },
+      {
+        role: "user",
+        content: prompt
+      }
+    ],
+    model: "llama-3.1-8b-instant", // Fast Groq model
+    temperature: 0.7,
+    max_tokens: 150,
+    response_format: { type: "json_object" }
+  }));
+  
+  const text = completion.choices[0]?.message?.content || "";
+  console.log(`✅ Groq response received`);
+  return parseResponse(text);
+}
+
+function getAnalysisPrompt(message, userName) {
+  return `
 You are analyzing messages in a Telegram group chat.
 
 User: ${userName}
-Message: "${trimmedMessage}"
+Message: "${message}"
 
 Classify into ONE category:
 - CONFIRMING: saying YES (coming, yes, im in, count me in, lets go, im there)
@@ -57,23 +110,6 @@ Return ONLY JSON:
   "intent": "CONFIRMING|EXCUSE|PROPOSAL|NEUTRAL",
   "response": "your response"
 }`;
-
-    console.log(`🤖 Sending to Gemini (timeout: 15s)...`);
-    
-    // Add 15 second timeout for Gemini API
-    const result = await model.generateContent(prompt);
-    const text = result.response.text();
-    
-    console.log(`🤖 Gemini response received`);
-    
-    return parseResponse(text);
-    
-  } catch (error) {
-    console.error("Gemini API error:", error.message);
-    
-    // Return immediate fallback without waiting
-    return getSmartFallback(message, userName);
-  }
 }
 
 function parseResponse(text) {
@@ -119,12 +155,11 @@ function parseResponse(text) {
 function getSmartFallback(message, userName) {
   const lowerMsg = message.toLowerCase();
   
-  // Simple keyword-based detection as fallback
   if (lowerMsg.includes('coming') || lowerMsg.includes('yes') || lowerMsg.includes('im in') || 
       lowerMsg.includes('count me') || lowerMsg.includes('lets go') || lowerMsg.includes('im there')) {
     return {
       intent: "CONFIRMING",
-      response: `Wuhuu! Let's go ${userName}! 🎉`
+      response: getRandomFromArray(CONFIRMING_RESPONSES, userName)
     };
   }
   
@@ -132,7 +167,7 @@ function getSmartFallback(message, userName) {
       lowerMsg.includes('no') || lowerMsg.includes('sorry') || lowerMsg.includes('maybe next')) {
     return {
       intent: "EXCUSE",
-      response: `Nice try ${userName}, but we'll remember this! 😏`
+      response: getRandomFromArray(EXCUSE_BLOCK_RESPONSES, userName)
     };
   }
   
@@ -140,7 +175,7 @@ function getSmartFallback(message, userName) {
       lowerMsg.includes('wanna') || lowerMsg.includes('want to')) {
     return {
       intent: "PROPOSAL",
-      response: `👀 ${userName} has an idea! What do others think? 🎯`
+      response: getRandomFromArray(PROPOSAL_DETECT_RESPONSES, userName)
     };
   }
   
@@ -152,4 +187,10 @@ function fallbackResponse() {
     intent: "NEUTRAL",
     response: "Got it! 👍"
   };
+}
+
+function getRandomFromArray(arr, userName = "") {
+  let response = arr[Math.floor(Math.random() * arr.length)];
+  response = response.replace(/{userName}/g, userName);
+  return response;
 }
