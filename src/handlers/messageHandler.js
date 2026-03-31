@@ -203,15 +203,15 @@ async function handleEventResponse(ctx, user, event, message, name, username, ch
       await safeSend(ctx, responseText, getEventActionKeyboard(event.id, false));
     } 
     else if (existingConfirmation && analysis.intent === "CONFIRMING") {
-      const hypeResponse = analysis.response/* getRandomResponse(DOUBLE_CONFIRMATION_RESPONSES, { username });*/
+      const hypeResponse = getRandomResponse(DOUBLE_CONFIRMATION_RESPONSES, { username });
       const responseText = `${hypeResponse}\n\n*${escapeMarkdown(name)}* is already confirmed! 🔥\n\n📊 *${confirmedCount} people confirmed so far*`;
       await safeSend(ctx, responseText, getEventActionKeyboard(event.id, true));
     }
     else if (existingConfirmation && analysis.intent === "EXCUSE") {
-      const responseText = analysis.response/*getRandomResponse(ALREADY_CONFIRMED_EXCUSE_RESPONSES, {
+      const responseText = getRandomResponse(ALREADY_CONFIRMED_EXCUSE_RESPONSES, {
         name: escapeMarkdown(name),
         event: escapeMarkdown(event.title)
-      });*/
+      });
       await safeSend(ctx, responseText, getEventActionKeyboard(event.id, true));
     }
     
