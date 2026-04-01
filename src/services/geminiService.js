@@ -1,14 +1,19 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { config } from "../config/index.js";
 import Groq from "groq-sdk";
+import {
+  CONFIRMATION_RESPONSES,
+  EXCUSE_BLOCK_RESPONSES,
+  PROPOSAL_DETECT_RESPONSES
+} from "../responses/response.js";
 
 // primary llm
 const genAI = new GoogleGenerativeAI(config.geminiApiKey);
-const MODEL_NAME = "gemini-2.5-flash-lite-preview-09-2025"; 
+const MODEL_NAME = config.geminiModel;
 
 // fallback 
 const groq = new Groq({ apiKey: config.groqApiKey });
-const groqModel = "llama-3.3-70b-versatile";
+const groqModel = config.groqModel;
 
 const timeoutPromise = (ms, promise) => {
   return new Promise((resolve, reject) => {
@@ -161,7 +166,7 @@ function getSmartFallback(message, userName) {
       lowerMsg.includes('count me') || lowerMsg.includes('lets go') || lowerMsg.includes('im there')) {
     return {
       intent: "CONFIRMING",
-      response: getRandomFromArray(CONFIRMING_RESPONSES, userName)
+      response: getRandomFromArray(CONFIRMATION_RESPONSES, userName)
     };
   }
   

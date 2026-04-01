@@ -3,7 +3,8 @@ import {
   getAllUsers,
   getLatestEvent,
   getEventConfirmations,
-  getEventById
+  getEventById,
+  deleteEvent
 } from "../db/model.js";
 import { config } from "../config/index.js";
 import { bot } from "../bot.js";
@@ -47,43 +48,37 @@ export async function sendDailyReminders() {
         continue;
       }
 
-      const users = await getAllUsers(chatId);
       const confirmations = await getEventConfirmations(event.id);
       const confirmedUserIds = new Set(confirmations?.map((c) => c.user_id) || []);
-      
+      const confirmedNames = confirmations?.map(c => c.users?.name).filter(Boolean) || [];
       const confirmedCount = confirmedUserIds.size;
-      const totalUsers = users.length;
 
-      console.log(`Sending reminders for "${event.title}" in chat ${chatId} (${daysUntil} days away)`);
+      console.log(`Sending reminder for "${event.title}" to chat ${chatId} (${daysUntil} days away)`);
 
-      for (const user of users) {
-        const isConfirmed = confirmedUserIds.has(user.id);
-        
-        try {
-          const daysUntilStr = getDayString(daysUntil);
-          const username = user.telegram_id;
-          
-          let message;
-          if (isConfirmed) {
-            message = `🎉 @${username}! Reminder: ${event.title} is ${daysUntilStr}!\n\n${confirmedCount} people confirmed! See you there! 🎊`;
-          } else {
-            message = `👀 @${username}! ${event.title} is ${daysUntilStr}!\n\n${confirmedCount} people are coming. Don't miss out! Join now! 🎉`;
-          }
-          
-          const dateStr = new Date(event.event_date).toLocaleDateString('en-US', {
-            weekday: 'long',
-            month: 'long',
-            day: 'numeric'
-          });
-          
-          message += `\n\n📅 Date: ${dateStr}`;
-          
-          await bot.telegram.sendMessage(user.telegram_id, message);
-          await new Promise(resolve => setTimeout(resolve, 100));
-          
-        } catch (error) {
-          console.error(`Failed to send to ${user.telegram_id}:`, error.message);
+      try {
+        const daysUntilStr = getDayString(daysUntil);
+        const dateStr = new Date(event.event_date).toLocaleDateString('en-US', {
+          weekday: 'long',
+          month: 'long',
+          day: 'numeric'
+        });
+
+        let message = `📢 *Daily Reminder*\n\n`;
+        message += `🎯 *${event.title}* is ${daysUntilStr}!\n`;
+        message += `📅 ${dateStr}\n\n`;
+        message += `✅ *${confirmedCount} confirmed:*\n`;
+
+        if (confirmedNames.length > 0) {
+          message += confirmedNames.map(name => `• ${name}`).join("\n");
+        } else {
+          message += `No one yet — be the first! 🎉`;
         }
+
+        message += `\n\nDon't miss out! Confirm now! 🚀`;
+
+        await bot.telegram.sendMessage(chatId, message, { parse_mode: "Markdown" });
+      } catch (error) {
+        console.error(`Failed to send reminder to chat ${chatId}:`, error.message);
       }
     }
     

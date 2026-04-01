@@ -17,6 +17,7 @@ import {
   EVERYONE_CONFIRMED_RESPONSES,
   DOUBLE_CONFIRMATION_RESPONSES,
   EXCUSE_BLOCK_RESPONSES,
+  EXCUSE_ACCEPTED_RESPONSES,
   ALREADY_CONFIRMED_EXCUSE_RESPONSES,
   HYPE_RESPONSES,
   getRandomResponse
@@ -33,7 +34,33 @@ import {
 } from "../utils/keyboard.js";
 import { escapeMarkdown, getFallbackAnalysis, safeSend } from "../utils/helper.js";
 
-let activeProposal = null;
+// Track excuse attempts per user per event: key = "eventId:userId", value = count
+const excuseCounts = new Map();
+const MAX_EXCUSE_FORCES = 2; // Force/roast them twice, then accept on 3rd attempt
+
+function getExcuseKey(eventId, userId) {
+  return `${eventId}:${userId}`;
+}
+
+function getExcuseCount(eventId, userId) {
+  return excuseCounts.get(getExcuseKey(eventId, userId)) || 0;
+}
+
+function incrementExcuseCount(eventId, userId) {
+  const key = getExcuseKey(eventId, userId);
+  const count = (excuseCounts.get(key) || 0) + 1;
+  excuseCounts.set(key, count);
+  return count;
+}
+
+// Clean up excuse counts for an event (call when event is cancelled/cleared)
+export function clearExcuseCounts(eventId) {
+  for (const key of excuseCounts.keys()) {
+    if (key.startsWith(`${eventId}:`)) {
+      excuseCounts.delete(key);
+    }
+  }
+}
 
 
 export async function handleText(ctx) {
@@ -86,18 +113,59 @@ export async function handleText(ctx) {
 
 async function detectProposal(message, name) {
   try {
-    const proposalKeywords = ['let', 'lets', 'let us', 'how about', 'want to', 'wanna', 'shall we', 'plan', 'organize'];
-    const messageLower = message.toLowerCase();
-    const hasProposalKeyword = proposalKeywords.some(keyword => messageLower.includes(keyword));
+    const messageLower = message.toLowerCase().trim();
     
-    if (!hasProposalKeyword) return false;
+    // Skip very short messages or questions-only
+    if (messageLower.length < 5) return false;
     
+    // Strong proposal patterns — these are almost certainly proposals, no AI needed
+    const strongPatterns = [
+      /\blet'?s\s+(go|eat|play|watch|meet|hang|grab|get|do|have|try|visit|check out)/i,
+      /\bhow about\s+(we|going|eating|playing|watching|meeting|hanging|grabbing)/i,
+      /\bshall we\s+\w+/i,
+      /\bwanna\s+(go|eat|play|watch|meet|hang|grab|get|do|have)/i,
+      /\bwant to\s+(go|eat|play|watch|meet|hang|grab|get|do|have)/i,
+      /\bwho'?s?\s+(down|in)\s+(for|to)\b/i,
+      /\banyone\s+(down|want|wanna|interested|up)\s+(for|to|in)\b/i,
+      /\bwe should\s+(go|eat|play|watch|meet|hang|grab|get|do|have|try)/i,
+    ];
+    
+    if (strongPatterns.some(pattern => pattern.test(messageLower))) {
+      console.log(`🎯 Strong proposal detected: "${message}"`);
+      return true;
+    }
+    
+    // Weak signals — could be proposals, need AI to confirm
+    const weakPatterns = [
+      /\blet'?s\b/i,
+      /\btonight\b/i,
+      /\bthis weekend\b/i,
+      /\btomorrow\b/i,
+      /\bplan\s+(something|a|an|the)/i,
+      /\borganize\s+(a|an|the|something)/i,
+      /\banybody\s+free\b/i,
+      /\banyone\s+free\b/i,
+      /\bfree\s+(tonight|today|tomorrow|this)/i,
+    ];
+    
+    const hasWeakSignal = weakPatterns.some(pattern => pattern.test(messageLower));
+    
+    if (!hasWeakSignal) return false;
+    
+    // Use AI to verify weak signals
+    console.log(`🤔 Weak proposal signal, verifying with AI: "${message}"`);
     const analysis = await analyzeMessageGemini(message, name);
-    return analysis.intent === "PROPOSAL" || hasProposalKeyword;
+    return analysis.intent === "PROPOSAL";
+    
   } catch (error) {
     console.error("Error detecting proposal:", error);
-    const proposalKeywords = ['let', 'lets', 'let us', 'how about', 'want to', 'wanna'];
-    return proposalKeywords.some(keyword => message.toLowerCase().includes(keyword));
+    // Safe fallback — only match strong patterns
+    const safePatterns = [
+      /\blet'?s\s+(go|eat|play|watch|meet|hang|grab)/i,
+      /\bhow about\s+(we|going|eating)/i,
+      /\bwanna\s+(go|eat|play|hang)/i,
+    ];
+    return safePatterns.some(pattern => pattern.test(message));
   }
 }
 
@@ -149,13 +217,6 @@ async function handleProposal(ctx, user, message, name, username, chatId) {
     
     await safeSend(ctx, responseText, getAfterCreationKeyboard(event.id));
     
-    activeProposal = {
-      eventId: event.id,
-      proposer: name,
-      activity: activity,
-      timestamp: Date.now()
-    };
-    
   } catch (error) {
     console.error("Error handling proposal:", error);
     await ctx.reply("Sorry, I couldn't create the event. Please try again.");
@@ -198,9 +259,25 @@ async function handleEventResponse(ctx, user, event, message, name, username, ch
       await safeSend(ctx, responseText, getEventActionKeyboard(event.id, true));
     } 
     else if (analysis.intent === "EXCUSE" && !existingConfirmation) {
-      const funnyBlock = analysis.response/*getRandomResponse(EXCUSE_BLOCK_RESPONSES, { username })*/;
-      const responseText = `😏 ${funnyBlock}\n\n*${escapeMarkdown(name)}* tried to escape with: "${escapeMarkdown(message)}"\n\n📊 *${confirmedCount} people are still coming* 🎉`;
-      await safeSend(ctx, responseText, getEventActionKeyboard(event.id, false));
+      const excuseAttempt = incrementExcuseCount(event.id, user.id);
+      
+      if (excuseAttempt <= MAX_EXCUSE_FORCES) {
+        // Attempts 1-2: Roast and reject the excuse, try to force them in
+        const funnyBlock = analysis.response;
+        const attemptsLeft = MAX_EXCUSE_FORCES - excuseAttempt;
+        const warningText = attemptsLeft > 0 
+          ? `\n\n⚠️ _${attemptsLeft} more excuse${attemptsLeft > 1 ? 's' : ''} before we give up on you!_`
+          : `\n\n⚠️ _Last chance! One more excuse and you're officially OUT!_`;
+        const responseText = `😏 ${funnyBlock}\n\n*${escapeMarkdown(name)}* tried to escape with: "${escapeMarkdown(message)}"${warningText}\n\n📊 *${confirmedCount} people are still coming* 🎉`;
+        await safeSend(ctx, responseText, getEventActionKeyboard(event.id, false));
+      } else {
+        // Attempt 3+: Accept the excuse with a final devastating roast
+        const finalRoast = getRandomResponse(EXCUSE_ACCEPTED_RESPONSES, { username, name: escapeMarkdown(name) });
+        const responseText = `${finalRoast}\n\n❌ *${escapeMarkdown(name)}* is officially *NOT COMING*\n\n📊 *${confirmedCount} people are still coming* (without ${escapeMarkdown(name)} 😢)`;
+        await safeSend(ctx, responseText, getEventActionKeyboard(event.id, false));
+        
+        console.log(`📝 ${name} excused after ${excuseAttempt} attempts for event "${event.title}"`);
+      }
     } 
     else if (existingConfirmation && analysis.intent === "CONFIRMING") {
       const hypeResponse = getRandomResponse(DOUBLE_CONFIRMATION_RESPONSES, { username });

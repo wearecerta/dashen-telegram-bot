@@ -6,7 +6,8 @@ dotenv.config();
 export const config = {
   botToken: process.env.BOT_TOKEN,
   geminiApiKey: process.env.GEMINI_API_KEY,
-  geminiModel: process.env.GEMINI_MODEL || "gemini-pro",
+  geminiModel: process.env.GEMINI_MODEL || "gemini-2.5-flash-lite",
+  groqModel: process.env.GROQ_MODEL || "llama-3.3-70b-versatile",
   supabaseUrl: process.env.SUPABASE_URL,
   supabaseKey: process.env.SUPABASE_KEY,
   groqApiKey: process.env.GROQ_API_KEY,

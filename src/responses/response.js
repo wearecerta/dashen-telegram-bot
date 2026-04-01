@@ -65,6 +65,20 @@ export const EXCUSE_BLOCK_RESPONSES = [
   "The group has voted... Your excuse is INVALID! 🗳️ @{username}"
 ];
 
+// Final Roast - Excuse Accepted (after 2 failed attempts to convince them)
+export const EXCUSE_ACCEPTED_RESPONSES = [
+  "😤 Fine @{username}... we'll *survive* without you. Somehow. Maybe. 💔",
+  "🏳️ Alright @{username}, you win THIS time. But we're keeping score! 📝",
+  "😒 OK OK @{username}, message received LOUD and CLEAR. You're officially *NOT COMING*. Happy now? 😏",
+  "🫡 @{username} has officially bailed. Let the record show they chose *not vibing* today. 📋",
+  "💀 RIP @{username}'s social life. Gone but not forgotten. We'll have fun WITHOUT you! 🎉",
+  "🎻 *plays world's smallest violin* Fine @{username}, you're off the hook... THIS TIME. 😤",
+  "📢 ATTENTION: @{username} is officially a *no-show*. Everyone remember this day! 🗓️",
+  "🤧 We tried @{username}... we really tried. But you can't save someone who doesn't want to be saved. 😔",
+  "👋 Bye @{username}! We'll send you photos of all the fun you're MISSING! 📸",
+  "🪦 Here lies @{username}'s attendance. Cause of death: weak excuses. Rest in peace. ⚰️"
+];
+
 // Already Confirmed Trying to Excuse
 export const ALREADY_CONFIRMED_EXCUSE_RESPONSES = [
   "🤔 Nice try *{name}*, but you're already locked in for *{event}*!\n\nNo take backs! The party needs you! 🎉",
