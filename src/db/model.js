@@ -65,6 +65,15 @@ export async function getLatestEvent(chatId) {
   return data;
 }
 
+export async function getAllEvents() {
+  const { data, error } = await supabase
+    .from("events")
+    .select("*");
+  
+  if (error) throw error;
+  return data || [];
+}
+
 export async function getEventById(id) {
   const { data, error } = await supabase
     .from("events")

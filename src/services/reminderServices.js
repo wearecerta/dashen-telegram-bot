@@ -4,14 +4,42 @@ import {
   getLatestEvent,
   getEventConfirmations,
   getEventById,
-  deleteEvent
+  deleteEvent,
+  getAllEvents
 } from "../db/model.js";
 import { config } from "../config/index.js";
 import { bot } from "../bot.js";
 
 const currentEvents = new Map(); // key: chatId, value: eventId
 
-export function startReminderService() {
+export async function startReminderService() {
+  // 1. Initialize currentEvents from the database
+  try {
+    const allEvents = await getAllEvents();
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    allEvents.forEach(event => {
+      const eventDate = new Date(event.event_date);
+      eventDate.setHours(0, 0, 0, 0);
+      
+      const daysUntil = Math.ceil((eventDate - today) / (1000 * 60 * 60 * 24));
+      
+      // Only track future or current events
+      if (daysUntil >= 0) {
+        // Only track the "latest" version for each chat
+        const existing = currentEvents.get(event.chat_id);
+        if (!existing || new Date(event.created_at) > new Date(allEvents.find(e => e.id === existing)?.created_at || 0)) {
+          currentEvents.set(event.chat_id, event.id);
+        }
+      }
+    });
+    console.log(`📡 Loaded ${currentEvents.size} active events into reminder service`);
+  } catch (error) {
+    console.error("Error initializing reminder service from DB:", error);
+  }
+
+  // 2. Schedule the daily job
   cron.schedule(
     `${config.reminderMinute} ${config.reminderHour} * * *`,
     async () => {

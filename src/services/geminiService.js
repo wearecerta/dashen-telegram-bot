@@ -4,14 +4,14 @@ import Groq from "groq-sdk";
 import {
   CONFIRMATION_RESPONSES,
   EXCUSE_BLOCK_RESPONSES,
-  PROPOSAL_DETECT_RESPONSES
+  PROPOSAL_DETECT_RESPONSES,
 } from "../responses/response.js";
 
 // primary llm
 const genAI = new GoogleGenerativeAI(config.geminiApiKey);
 const MODEL_NAME = config.geminiModel;
 
-// fallback 
+// fallback
 const groq = new Groq({ apiKey: config.groqApiKey });
 const groqModel = config.groqModel;
 
@@ -20,7 +20,7 @@ const timeoutPromise = (ms, promise) => {
     const timeoutId = setTimeout(() => {
       reject(new Error(`Operation timed out after ${ms}ms`));
     }, ms);
-    
+
     promise.then(
       (res) => {
         clearTimeout(timeoutId);
@@ -29,7 +29,7 @@ const timeoutPromise = (ms, promise) => {
       (err) => {
         clearTimeout(timeoutId);
         reject(err);
-      }
+      },
     );
   });
 };
@@ -37,27 +37,27 @@ const timeoutPromise = (ms, promise) => {
 export async function analyzeMessageGemini(message, userName = "User") {
   // Try Gemini first
   try {
-    if (!message || typeof message !== 'string') {
+    if (!message || typeof message !== "string") {
       return fallbackResponse();
     }
 
-    const trimmedMessage = message.length > 300 ? message.substring(0, 300) + "..." : message;
+    const trimmedMessage =
+      message.length > 300 ? message.substring(0, 300) + "..." : message;
     const model = genAI.getGenerativeModel({ model: MODEL_NAME });
 
     const prompt = getAnalysisPrompt(trimmedMessage, userName);
 
     console.log(`🤖 Sending to Gemini (timeout: 10s)...`);
-    
+
     const result = await timeoutPromise(10000, model.generateContent(prompt));
     const text = result.response.text();
-    
+
     console.log(`✅ Gemini response received`);
     return parseResponse(text);
-    
   } catch (error) {
     console.error("Gemini API error:", error.message);
     console.log("🔄 Falling back to Groq...");
-    
+
     // Try Groq as fallback
     try {
       return await analyzeWithGroq(message, userName);
@@ -69,26 +69,31 @@ export async function analyzeMessageGemini(message, userName = "User") {
 }
 
 async function analyzeWithGroq(message, userName) {
-  const trimmedMessage = message.length > 300 ? message.substring(0, 300) + "..." : message;
+  const trimmedMessage =
+    message.length > 300 ? message.substring(0, 300) + "..." : message;
   const prompt = getAnalysisPrompt(trimmedMessage, userName);
-  
-  const completion = await timeoutPromise(10000, groq.chat.completions.create({
-    messages: [
-      {
-        role: "system",
-        content: "You are a helpful assistant that analyzes messages and returns ONLY valid JSON."
-      },
-      {
-        role: "user",
-        content: prompt
-      }
-    ],
-    model: groqModel, 
-    temperature: 0.7,
-    max_tokens: 150,
-    response_format: { type: "json_object" }
-  }));
-  
+
+  const completion = await timeoutPromise(
+    10000,
+    groq.chat.completions.create({
+      messages: [
+        {
+          role: "system",
+          content:
+            "You are a helpful assistant that analyzes messages and returns ONLY valid JSON.",
+        },
+        {
+          role: "user",
+          content: prompt,
+        },
+      ],
+      model: groqModel,
+      temperature: 0.7,
+      max_tokens: 150,
+      response_format: { type: "json_object" },
+    }),
+  );
+
   const text = completion.choices[0]?.message?.content || "";
   console.log(`✅ Groq response received`);
   return parseResponse(text);
@@ -122,20 +127,21 @@ Return ONLY JSON:
 function parseResponse(text) {
   try {
     const parsed = JSON.parse(text);
-    
+
     if (parsed.intent && parsed.response) {
       parsed.intent = parsed.intent.toUpperCase();
-      
-      if (["CONFIRMING", "EXCUSE", "PROPOSAL", "NEUTRAL"].includes(parsed.intent)) {
+
+      if (
+        ["CONFIRMING", "EXCUSE", "PROPOSAL", "NEUTRAL"].includes(parsed.intent)
+      ) {
         return {
           intent: parsed.intent,
-          response: parsed.response.substring(0, 150)
+          response: parsed.response.substring(0, 150),
         };
       }
     }
-    
+
     return fallbackResponse();
-    
   } catch (e) {
     const match = text.match(/\{[\s\S]*\}/);
     if (match) {
@@ -143,10 +149,14 @@ function parseResponse(text) {
         const parsed = JSON.parse(match[0]);
         if (parsed.intent && parsed.response) {
           parsed.intent = parsed.intent.toUpperCase();
-          if (["CONFIRMING", "EXCUSE", "PROPOSAL", "NEUTRAL"].includes(parsed.intent)) {
+          if (
+            ["CONFIRMING", "EXCUSE", "PROPOSAL", "NEUTRAL"].includes(
+              parsed.intent,
+            )
+          ) {
             return {
               intent: parsed.intent,
-              response: parsed.response.substring(0, 150)
+              response: parsed.response.substring(0, 150),
             };
           }
         }
@@ -154,45 +164,62 @@ function parseResponse(text) {
         console.error("JSON parse failed:", err);
       }
     }
-    
+
     return fallbackResponse();
   }
 }
 
 function getSmartFallback(message, userName) {
   const lowerMsg = message.toLowerCase();
-  
-  if (lowerMsg.includes('coming') || lowerMsg.includes('yes') || lowerMsg.includes('im in') || 
-      lowerMsg.includes('count me') || lowerMsg.includes('lets go') || lowerMsg.includes('im there')) {
+
+  if (
+    lowerMsg.includes("coming") ||
+    lowerMsg.includes("yes") ||
+    lowerMsg.includes("im in") ||
+    lowerMsg.includes("count me") ||
+    lowerMsg.includes("lets go") ||
+    lowerMsg.includes("im there")
+  ) {
     return {
       intent: "CONFIRMING",
-      response: getRandomFromArray(CONFIRMATION_RESPONSES, userName)
+      response: getRandomFromArray(CONFIRMATION_RESPONSES, userName),
     };
   }
-  
-  if (lowerMsg.includes('cant') || lowerMsg.includes('can\'t') || lowerMsg.includes('busy') || 
-      lowerMsg.includes('no') || lowerMsg.includes('sorry') || lowerMsg.includes('maybe next')) {
+
+  if (
+    lowerMsg.includes("cant") ||
+    lowerMsg.includes("can't") ||
+    lowerMsg.includes("busy") ||
+    lowerMsg.includes("no") ||
+    lowerMsg.includes("sorry") ||
+    lowerMsg.includes("maybe next")
+  ) {
     return {
       intent: "EXCUSE",
-      response: getRandomFromArray(EXCUSE_BLOCK_RESPONSES, userName)
+      response: getRandomFromArray(EXCUSE_BLOCK_RESPONSES, userName),
     };
   }
-  
-  if (lowerMsg.includes('let') || lowerMsg.includes('lets') || lowerMsg.includes('how about') || 
-      lowerMsg.includes('wanna') || lowerMsg.includes('want to')) {
+
+  if (
+    lowerMsg.includes("let") ||
+    lowerMsg.includes("lets") ||
+    lowerMsg.includes("how about") ||
+    lowerMsg.includes("wanna") ||
+    lowerMsg.includes("want to")
+  ) {
     return {
       intent: "PROPOSAL",
-      response: getRandomFromArray(PROPOSAL_DETECT_RESPONSES, userName)
+      response: getRandomFromArray(PROPOSAL_DETECT_RESPONSES, userName),
     };
   }
-  
+
   return fallbackResponse();
 }
 
 function fallbackResponse() {
   return {
     intent: "NEUTRAL",
-    response: "Got it! 👍"
+    response: "Got it! 👍",
   };
 }
 
