@@ -140,6 +140,10 @@ async function detectProposal(message, name) {
       /\bwho'?s?\s+(down|in)\s+(for|to)\b/i,
       /\banyone\s+(down|want|wanna|interested|up)\s+(for|to|in)\b/i,
       /\bwe should\s+(go|eat|play|watch|meet|hang|grab|get|do|have|try)/i,
+      /\bwhat do you think\b/i,
+      /\bwhat do you guys think\b/i,
+      /\bplanning to\b/i,
+      /\bplanning on\b/i,
     ];
 
     if (strongPatterns.some((pattern) => pattern.test(messageLower))) {
@@ -151,6 +155,9 @@ async function detectProposal(message, name) {
     const weakPatterns = [
       /\blet'?s\b/i,
       /\btonight\b/i,
+      /\bplaning to\b/i,
+      /\bplanned to\b/i,
+      /\bplanned on\b/i,
       /\bthis weekend\b/i,
       /\btomorrow\b/i,
       /\bplan\s+(something|a|an|the)/i,
@@ -177,6 +184,8 @@ async function detectProposal(message, name) {
       /\blet'?s\s+(go|eat|play|watch|meet|hang|grab)/i,
       /\bhow about\s+(we|going|eating)/i,
       /\bwanna\s+(go|eat|play|hang)/i,
+      /\bplaning to\b/i,
+      /\bplanned to\b/i,
     ];
     return safePatterns.some((pattern) => pattern.test(message));
   }
