@@ -144,6 +144,7 @@ async function detectProposal(message, name) {
       /\bwhat do you guys think\b/i,
       /\bplanning to\b/i,
       /\bplanning on\b/i,
+      /\bbeers next week anyone\b/i,
     ];
 
     if (strongPatterns.some((pattern) => pattern.test(messageLower))) {
@@ -165,6 +166,13 @@ async function detectProposal(message, name) {
       /\banybody\s+free\b/i,
       /\banyone\s+free\b/i,
       /\bfree\s+(tonight|today|tomorrow|this)/i,
+      // next week
+      /\bnext week\b/i,
+      /\bany one\b/i,
+      /\bon\b/i,
+      /\bbeers\b/i,
+      /\banyone\b/i,
+      /\bhang out\b/i,
     ];
 
     const hasWeakSignal = weakPatterns.some((pattern) =>
