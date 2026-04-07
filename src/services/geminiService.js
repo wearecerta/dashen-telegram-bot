@@ -109,7 +109,7 @@ Message: "${message}"
 Classify into ONE category:
 - CONFIRMING: saying YES (coming, yes, im in, count me in, lets go, im there)
 - EXCUSE: saying NO (cant, busy, maybe next time, sorry, no, not today)
-- PROPOSAL: suggesting activity (lets eat, lets go out, how about dinner, want to hang)
+- PROPOSAL: suggesting activity or offering something (lets eat, lets go out, beers on me, anyone down for, how about dinner, want to hang, who's up for)
 - NEUTRAL: anything else
 
 If CONFIRMING: enthusiastic response (max 12 words)
@@ -205,7 +205,14 @@ function getSmartFallback(message, userName) {
     lowerMsg.includes("lets") ||
     lowerMsg.includes("how about") ||
     lowerMsg.includes("wanna") ||
-    lowerMsg.includes("want to")
+    lowerMsg.includes("want to") ||
+    lowerMsg.includes("anyone") ||
+    lowerMsg.includes("anybody") ||
+    lowerMsg.includes("down for") ||
+    lowerMsg.includes("who's up") ||
+    lowerMsg.includes("who is up") ||
+    lowerMsg.includes("takers") ||
+    lowerMsg.includes("on me")
   ) {
     return {
       intent: "PROPOSAL",

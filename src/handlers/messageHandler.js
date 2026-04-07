@@ -128,7 +128,7 @@ async function detectProposal(message, name) {
     const messageLower = message.toLowerCase().trim();
 
     // Skip very short messages or questions-only
-    if (messageLower.length < 5) return false;
+    if (messageLower.length < 10) return false;
 
     // Strong proposal patterns — these are almost certainly proposals, no AI needed
     const strongPatterns = [
@@ -138,13 +138,15 @@ async function detectProposal(message, name) {
       /\bwanna\s+(go|eat|play|watch|meet|hang|grab|get|do|have)/i,
       /\bwant to\s+(go|eat|play|watch|meet|hang|grab|get|do|have)/i,
       /\bwho'?s?\s+(down|in)\s+(for|to)\b/i,
-      /\banyone\s+(down|want|wanna|interested|up)\s+(for|to|in)\b/i,
+      /\banyone\s+(down|want|free|wanna|interested|up)\s+(for|to|in)\b/i,
       /\bwe should\s+(go|eat|play|watch|meet|hang|grab|get|do|have|try)/i,
       /\bwhat do you think\b/i,
       /\bwhat do you guys think\b/i,
       /\bplanning to\b/i,
       /\bplanning on\b/i,
       /\bbeers next week anyone\b/i,
+      /\bon me\b/i,
+      /\bany takers\b/i,
     ];
 
     if (strongPatterns.some((pattern) => pattern.test(messageLower))) {
@@ -172,6 +174,9 @@ async function detectProposal(message, name) {
       /\bon\b/i,
       /\bbeers\b/i,
       /\banyone\b/i,
+      /\bany takers\b/i,
+      /\btakers\b/i,
+      /\bon me\b/i,
       /\bhang out\b/i,
     ];
 
@@ -194,6 +199,8 @@ async function detectProposal(message, name) {
       /\bwanna\s+(go|eat|play|hang)/i,
       /\bplaning to\b/i,
       /\bplanned to\b/i,
+      /\bon me\b/i,
+      /\bany takers\b/i,
     ];
     return safePatterns.some((pattern) => pattern.test(message));
   }
@@ -212,6 +219,9 @@ async function handleProposal(ctx, user, message, name, username, chatId) {
       /^want to\s+/i,
       /^wanna\s+/i,
       /^shall we\s+/i,
+      /^anyone\s+down\s+for\s+/i,
+      /^who'?s?\s+down\s+for\s+/i,
+      /^any\s+takers\s+for\s+/i,
     ];
 
     for (const pattern of proposalPhrases) {
@@ -220,6 +230,8 @@ async function handleProposal(ctx, user, message, name, username, chatId) {
 
     activity = activity.trim();
     activity = activity.replace(/^[,\s]+/, "");
+    activity = activity.replace(/,?(\s+)?any takers\s*\??$/i, "");
+    activity = activity.replace(/,?(\s+)?anyone\s*\??$/i, "");
     activity = activity.replace(/[?.,!]$/, "");
 
     if (activity.length > 0) {
