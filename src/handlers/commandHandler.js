@@ -12,6 +12,8 @@ import {
   getCurrentEventId,
 } from "../services/reminderServices.js";
 
+import { formatDateHuman } from "../utils/helper.js";
+
 // CREATE EVENT
 export async function handleEvent(ctx) {
   const chatId = ctx.message.chat.id.toString();
@@ -63,7 +65,7 @@ export async function handleStatus(ctx) {
     const confirmedNames = confirmations?.map((c) => c.users.name) || [];
     const count = confirmedNames.length;
 
-    let reply = `📋 **${event.title}** (${event.event_date})\n\n`;
+    let reply = `📋 **${event.title}**\n\n`;
     reply += `✅ **Confirmed:** ${count} people\n`;
 
     if (confirmedNames.length > 0) {
@@ -122,5 +124,29 @@ export async function handleCancel(ctx) {
   } catch (error) {
     console.error("Error in handleCancel:", error);
     await ctx.reply("Sorry, couldn't cancel the event. Please try again.");
+  }
+}
+
+export async function handleCountdown(ctx) {
+  try {
+    const chatId = ctx.message.chat.id.toString();
+    const currentEventId = getCurrentEventId(chatId);
+
+    if (!currentEventId) {
+      return ctx.reply("❌ There's no active plan right now!");
+    }
+
+    const event = await getEventById(currentEventId);
+    if (!event) {
+      return ctx.reply("❌ Active event not found.");
+    }
+
+    const timeRemaining = formatDateHuman(event.event_date);
+    const text = `⏳ *${event.title}* is happening *${timeRemaining}*!`;
+    
+    await ctx.reply(text, { parse_mode: "Markdown" });
+  } catch (error) {
+    console.error("Error in handleCountdown:", error);
+    await ctx.reply("Sorry, couldn't get the countdown. Please try again.");
   }
 }

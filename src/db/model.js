@@ -85,6 +85,18 @@ export async function getEventById(id) {
   return data;
 }
 
+export async function updateEventDate(eventId, newDate) {
+  const { data, error } = await supabase
+    .from("events")
+    .update({ event_date: newDate })
+    .eq("id", eventId)
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
 
 export async function createConfirmation(userId, eventId) {
   const { data, error } = await supabase

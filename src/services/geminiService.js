@@ -41,6 +41,9 @@ export async function analyzeMessageGemini(message, userName = "User") {
       return fallbackResponse();
     }
 
+    const lowerMsg = message.toLowerCase().trim();
+    if (lowerMsg.length < 5) return fallbackResponse();
+
     const trimmedMessage =
       message.length > 300 ? message.substring(0, 300) + "..." : message;
     const model = genAI.getGenerativeModel({ model: MODEL_NAME });
@@ -73,30 +76,56 @@ async function analyzeWithGroq(message, userName) {
     message.length > 300 ? message.substring(0, 300) + "..." : message;
   const prompt = getAnalysisPrompt(trimmedMessage, userName);
 
-  const completion = await timeoutPromise(
-    10000,
-    groq.chat.completions.create({
-      messages: [
-        {
-          role: "system",
-          content:
-            "You are a helpful assistant that analyzes messages and returns ONLY valid JSON.",
-        },
-        {
-          role: "user",
-          content: prompt,
-        },
-      ],
-      model: groqModel,
-      temperature: 0.7,
-      max_tokens: 150,
-      response_format: { type: "json_object" },
-    }),
-  );
+  // Fallback models in case the primary groq model hits a rate limit
+  const fallbackModels = [
+    groqModel,
+    "openai/gpt-oss-120b",
+    "llama-3.3-70b-versatile",
+    "openai/gpt-oss-20b",
+    "llama3-70b-8192",
+    "llama3-8b-8192",
+    "mixtral-8x7b-32768",
+    "gemma2-9b-it",
+  ];
 
-  const text = completion.choices[0]?.message?.content || "";
-  console.log(`✅ Groq response received`);
-  return parseResponse(text);
+  // Remove duplicates
+  const modelsToTry = [...new Set(fallbackModels)];
+
+  for (const currentModel of modelsToTry) {
+    try {
+      const completion = await timeoutPromise(
+        10000,
+        groq.chat.completions.create({
+          messages: [
+            {
+              role: "system",
+              content:
+                "You are a helpful assistant that analyzes messages and returns ONLY valid JSON.",
+            },
+            {
+              role: "user",
+              content: prompt,
+            },
+          ],
+          model: currentModel,
+          temperature: 0.7,
+          max_tokens: 150,
+          response_format: { type: "json_object" },
+        }),
+      );
+
+      const text = completion.choices[0]?.message?.content || "";
+      console.log(`✅ Groq response received using model: ${currentModel}`);
+      return parseResponse(text);
+    } catch (error) {
+      console.error(
+        `⚠️ Groq error with model ${currentModel}: ${error.message}`,
+      );
+      // Continue to try the next model
+    }
+  }
+
+  throw new Error("All Groq fallback models failed.");
 }
 
 function getAnalysisPrompt(message, userName) {
@@ -110,17 +139,25 @@ Classify into ONE category:
 - CONFIRMING: saying YES (coming, yes, im in, count me in, lets go, im there)
 - EXCUSE: saying NO (cant, busy, maybe next time, sorry, no, not today)
 - PROPOSAL: suggesting activity or offering something (lets eat, lets go out, beers on me, anyone down for, how about dinner, want to hang, who's up for)
+- RESCHEDULE: suggesting to change the date of the current plan, push it, make it tomorrow, delay it
+- QUERY: asking about details of the current plan or date (when is it, where, what time, what's the plan, are we going)
 - NEUTRAL: anything else
 
-If CONFIRMING: enthusiastic response (max 12 words)
-If EXCUSE: funny sarcastic response (max 15 words)
+If CONFIRMING: enthusiastic and encouraging response (max 12 words)
+If EXCUSE: very funny sarcastic and roasting response (max 15 words)
 If PROPOSAL: excited response encouraging others (max 12 words)
-If NEUTRAL: friendly casual response (max 8 words)
+If RESCHEDULE: helpful response proposing a vote to change the date (max 12 words)
+If QUERY: helpful response confirming we have a plan or checking details (max 12 words)
+If NEUTRAL: say nothing
+
+For PROPOSAL or RESCHEDULE, also extract the suggested date/time if mentioned (e.g., "beers", "next Friday", "tomorrow").
 
 Return ONLY JSON:
 {
-  "intent": "CONFIRMING|EXCUSE|PROPOSAL|NEUTRAL",
-  "response": "your very funny and roasting based on their excuse response and forcing and convincing them to show up"
+  "intent": "CONFIRMING|EXCUSE|PROPOSAL|RESCHEDULE|QUERY|NEUTRAL",
+  "response": "your funny or helpful response",
+  "activity": "clean short activity name (e.g., 'Beers', 'Movie Night', 'Gym') - PROPOSAL only",
+  "extracted_date": "extracted date/time (PROPOSAL/RESCHEDULE only, e.g., 'next Tuesday', 'tomorrow at 8pm')"
 }`;
 }
 
@@ -132,11 +169,20 @@ function parseResponse(text) {
       parsed.intent = parsed.intent.toUpperCase();
 
       if (
-        ["CONFIRMING", "EXCUSE", "PROPOSAL", "NEUTRAL"].includes(parsed.intent)
+        [
+          "CONFIRMING",
+          "EXCUSE",
+          "PROPOSAL",
+          "RESCHEDULE",
+          "QUERY",
+          "NEUTRAL",
+        ].includes(parsed.intent)
       ) {
         return {
           intent: parsed.intent,
           response: parsed.response.substring(0, 150),
+          activity: parsed.activity,
+          extracted_date: parsed.extracted_date,
         };
       }
     }
@@ -150,13 +196,20 @@ function parseResponse(text) {
         if (parsed.intent && parsed.response) {
           parsed.intent = parsed.intent.toUpperCase();
           if (
-            ["CONFIRMING", "EXCUSE", "PROPOSAL", "NEUTRAL"].includes(
-              parsed.intent,
-            )
+            [
+              "CONFIRMING",
+              "EXCUSE",
+              "PROPOSAL",
+              "RESCHEDULE",
+              "QUERY",
+              "NEUTRAL",
+            ].includes(parsed.intent)
           ) {
             return {
               intent: parsed.intent,
               response: parsed.response.substring(0, 150),
+              activity: parsed.activity,
+              extracted_date: parsed.extracted_date,
             };
           }
         }
@@ -217,6 +270,33 @@ function getSmartFallback(message, userName) {
     return {
       intent: "PROPOSAL",
       response: getRandomFromArray(PROPOSAL_DETECT_RESPONSES, userName),
+    };
+  }
+
+  if (
+    lowerMsg.includes("push") ||
+    lowerMsg.includes("reschedule") ||
+    lowerMsg.includes("tomorrow instead") ||
+    lowerMsg.includes("can we do")
+  ) {
+    return {
+      intent: "RESCHEDULE",
+      response: "A date change? Let me ask the others. 🤔",
+    };
+  }
+
+  if (
+    lowerMsg.includes("when") ||
+    lowerMsg.includes("what time") ||
+    lowerMsg.includes("where") ||
+    lowerMsg.includes("date") ||
+    lowerMsg.includes("what is the plan") ||
+    lowerMsg.includes("are we going") ||
+    lowerMsg.includes("what's the plan")
+  ) {
+    return {
+      intent: "QUERY",
+      response: "Checking the details for you! 🕵️‍♂️",
     };
   }
 

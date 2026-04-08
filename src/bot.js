@@ -6,12 +6,17 @@ import {
   handleStatus,
   handleReset,
   handleCancel,
+  handleCountdown,
 } from "./handlers/commandHandler.js";
 import {
-  findOrCreateUser,
   getEventById,
   getEventConfirmations,
   deleteEvent,
+  updateEventDate,
+  getAllUsers,
+  createConfirmation,
+  getUserConfirmation,
+  findOrCreateUser,
 } from "./db/model.js";
 import {
   clearCurrentEvent,
@@ -22,9 +27,19 @@ import {
   getRandomResponse,
   EVENT_CANCELLED_RESPONSES,
 } from "./responses/response.js";
-import { escapeMarkdown } from "./utils/helper.js";
+import { escapeMarkdown, formatDateHuman } from "./utils/helper.js";
 
 export const bot = new Telegraf(config.botToken);
+
+// Display commands in the Telegram bot menu
+bot.telegram.setMyCommands([
+  { command: "status", description: "📋 View current plan, dates & attendees" },
+  { command: "countdown", description: "⏳ See how much time is left" },
+  { command: "cancel", description: "🚫 Delete the current active plan" },
+]);
+
+// Track reschedule poll votes
+const pollVotes = new Map();
 
 // Handle /start
 bot.start(async (ctx) => {
@@ -83,6 +98,11 @@ bot.on("callback_query", async (ctx) => {
     } else if (callbackData.startsWith("status_")) {
       action = "status";
       eventId = callbackData.replace("status_", "");
+    } else if (callbackData.startsWith("vote_r_")) {
+      action = "poll_vote";
+      // Format: vote_r_y_eventId_newDate or vote_r_n_eventId
+      const split = callbackData.split("_");
+      eventId = split[3];
     } else {
       await ctx.answerCbQuery("❌ Invalid action");
       return;
@@ -158,7 +178,8 @@ bot.on("callback_query", async (ctx) => {
       const confirmedNames = confirmations?.map((c) => c.users.name) || [];
       const count = confirmedNames.length;
 
-      let statusMsg = `📋 *${event.title}* (${event.event_date})\n\n`;
+      let statusMsg = `📋 *${event.title}*\n`;
+      statusMsg += `⏳ *When:* ${formatDateHuman(event.event_date)}\n\n`;
       statusMsg += `✅ *Confirmed:* ${count} people\n`;
 
       if (confirmedNames.length > 0) {
@@ -179,14 +200,99 @@ bot.on("callback_query", async (ctx) => {
         await ctx.answerCbQuery("Status is up to date!");
       }
     }
-  } catch (error) {
-    console.error("Callback query error:", error);
-    if (!error.message?.includes("message is not modified")) {
-      try {
-        await ctx.answerCbQuery("❌ Something went wrong!");
-      } catch (e) {
-        console.error("Failed to answer callback:", e);
+
+    // Handle POLL VOTES action
+    else if (action === "poll_vote") {
+      const split = callbackData.split("_");
+      const voteType = split[2]; // 'y' or 'n'
+      const eId = split[3];
+      const newDate = split[4]; // might be undefined for 'n'
+
+      const tgId = ctx.from.id.toString();
+      const userName = ctx.from.first_name;
+      const chatId = ctx.chat?.id?.toString();
+
+      if (voteType === "n") {
+        await ctx.answerCbQuery("👎 You voted NO.");
+        return; // Or we can track no votes if needed
       }
+
+      // Automatically confirm the user for the event since they are voting YES for a new date
+      let dbUser;
+      try {
+        dbUser = await findOrCreateUser(tgId, userName, chatId);
+        if (dbUser && dbUser.id) {
+          const existingConf = await getUserConfirmation(dbUser.id, eId);
+          if (!existingConf) {
+            await createConfirmation(dbUser.id, eId);
+          }
+        }
+      } catch (e) {
+        console.error("Could not auto-confirm voter:", e);
+      }
+
+      const pollKey = `${eId}_${newDate}`;
+      if (!pollVotes.has(pollKey)) {
+        pollVotes.set(pollKey, new Set());
+      }
+
+      const votes = pollVotes.get(pollKey);
+
+      if (votes.has(tgId)) {
+        await ctx.answerCbQuery("ℹ️ You already voted YES!");
+        return;
+      }
+
+      votes.add(tgId);
+
+      // Check if we reached majority (50% + 1 of the group)
+      const allUsers = await getAllUsers(chatId);
+      const totalUsers = allUsers?.length || 0;
+      const requiredVotes = Math.max(2, Math.floor(totalUsers / 2) + 1);
+
+      if (votes.size >= requiredVotes) {
+        await updateEventDate(eId, newDate);
+        pollVotes.delete(pollKey);
+
+        await ctx.answerCbQuery("✅ Majority reached! Date updated.");
+        if (message) {
+          await ctx.editMessageText(
+            `🎉 **The people have spoken!**\n\nThe plan has been officially pushed to *${formatDateHuman(newDate)}*!`,
+            { parse_mode: "Markdown" },
+          );
+        } else {
+          await ctx.reply(
+            `🎉 **The people have spoken!**\n\nThe plan has been officially pushed to *${formatDateHuman(newDate)}*!`,
+            { parse_mode: "Markdown" },
+          );
+        }
+      } else {
+        await ctx.answerCbQuery(
+          `✅ Voted YES! (${votes.size} / ${requiredVotes} required)`,
+        );
+        if (message && message.text) {
+          // Add voter name without duplicating the main text if we can just append
+          try {
+            await ctx.editMessageText(message.text + `\n• ${userName} agreed`, {
+              parse_mode: "Markdown",
+              reply_markup: message.reply_markup,
+            });
+          } catch (e) {
+            // Ignore if message not modified error
+          }
+        }
+      }
+    }
+  } catch (error) {
+    if (error.message?.includes("message is not modified")) {
+      // Telegram throws an error if we try to edit a message but nothing actually changed. This is safe to ignore.
+      return;
+    }
+    console.error("Callback query error:", error);
+    try {
+      await ctx.answerCbQuery("❌ Something went wrong!");
+    } catch (e) {
+      console.error("Failed to answer callback:", e);
     }
   }
 });
@@ -204,9 +310,9 @@ bot.catch((err, ctx) => {
   ctx.reply("An error occurred. Please try again later.").catch(() => {});
 });
 
-bot.on("text", handleText);
 bot.command("event", handleEvent);
 bot.command("status", handleStatus);
+bot.command("countdown", handleCountdown);
 bot.command("reset", handleReset);
 bot.command("cancel", handleCancel);
 bot.command("help", async (ctx) => {
@@ -226,3 +332,6 @@ bot.command("help", async (ctx) => {
 
   await ctx.reply(helpMessage, { parse_mode: "Markdown" });
 });
+
+// ALWAYS register .on("text") last so it doesn't swallow commands
+bot.on("text", handleText);

@@ -63,3 +63,14 @@ export function getPostExcuseKeyboard(eventId) {
     ]
   ]);
 }
+
+// Reschedule poll keyboard
+export function getReschedulePollKeyboard(eventId, newDate) {
+  // Use raw eventId, not formatted, fits within 64 bytes
+  return Markup.inlineKeyboard([
+    [
+      Markup.button.callback("👍 Yes, change it", `vote_r_y_${eventId}_${newDate}`),
+      Markup.button.callback("👎 No", `vote_r_n_${eventId}`)
+    ]
+  ]);
+}
