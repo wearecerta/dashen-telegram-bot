@@ -123,6 +123,11 @@ export async function handleText(ctx) {
         return;
       }
 
+      if (analysis.intent === "OFF_TOPIC") {
+        console.log(`🔇 Ignoring OFF_TOPIC message from ${name}`);
+        return;
+      }
+
       await handleEventResponse(
         ctx,
         user,
@@ -189,6 +194,7 @@ async function handleQuery(ctx, event, name, username, chatId) {
 
   await safeSend(ctx, responseText, getEventActionKeyboard(event.id, false));
 }
+
 
 async function handleNeutral(ctx, event, name, username, chatId, analysis) {
   await safeSend(
@@ -281,14 +287,22 @@ async function handleProposal(
       activity = "hang out";
     }
 
+    const nullDates = ["none", "null", "unknown", "undefined", ""];
+    if (!suggestedDate || nullDates.includes(suggestedDate.toString().toLowerCase().trim())) {
+      suggestedDate = "Today";
+    }
+
     // Default suggested date extraction if AI didn't provide one
     if (suggestedDate === "Today") {
       suggestedDate = new Date().toISOString().split("T")[0];
     } else {
-      // Parse human friendy date into ISO format for DB
+      // Parse human friendly date into ISO format for DB
       const parsedDate = chrono.parseDate(suggestedDate);
       if (parsedDate) {
         suggestedDate = parsedDate.toISOString().split("T")[0];
+      } else {
+        // Fallback to today if chrono couldn't parse the LLM's string
+        suggestedDate = new Date().toISOString().split("T")[0];
       }
     }
 

@@ -213,8 +213,32 @@ bot.on("callback_query", async (ctx) => {
       const chatId = ctx.chat?.id?.toString();
 
       if (voteType === "n") {
+        const pollNoKey = `no_${eId}_${newDate}`;
+        if (!pollVotes.has(pollNoKey)) {
+          pollVotes.set(pollNoKey, new Set());
+        }
+        
+        const noVotes = pollVotes.get(pollNoKey);
+        
+        if (noVotes.has(tgId)) {
+          await ctx.answerCbQuery("ℹ️ You already voted NO!");
+          return;
+        }
+        
+        noVotes.add(tgId);
         await ctx.answerCbQuery("👎 You voted NO.");
-        return; // Or we can track no votes if needed
+        
+        if (message && message.text) {
+          try {
+            await ctx.editMessageText(message.text + `\n• ${userName} disagreed`, {
+              parse_mode: "Markdown",
+              reply_markup: message.reply_markup,
+            });
+          } catch (e) {
+            // Ignore if message not modified
+          }
+        }
+        return;
       }
 
       // Automatically confirm the user for the event since they are voting YES for a new date

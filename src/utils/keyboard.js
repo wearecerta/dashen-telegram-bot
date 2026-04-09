@@ -70,7 +70,7 @@ export function getReschedulePollKeyboard(eventId, newDate) {
   return Markup.inlineKeyboard([
     [
       Markup.button.callback("👍 Yes, change it", `vote_r_y_${eventId}_${newDate}`),
-      Markup.button.callback("👎 No", `vote_r_n_${eventId}`)
+      Markup.button.callback("👎 No", `vote_r_n_${eventId}_${newDate}`)
     ]
   ]);
 }

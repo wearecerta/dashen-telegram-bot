@@ -138,10 +138,11 @@ Message: "${message}"
 Classify into ONE category:
 - CONFIRMING: saying YES (coming, yes, im in, count me in, lets go, im there)
 - EXCUSE: saying NO (cant, busy, maybe next time, sorry, no, not today)
-- PROPOSAL: suggesting activity or offering something (lets eat, lets go out, beers on me, anyone down for, how about dinner, want to hang, who's up for)
-- RESCHEDULE: suggesting to change the date of the current plan, push it, make it tomorrow, delay it
-- QUERY: asking about details of the current plan or date (when is it, where, what time, what's the plan, are we going)
-- NEUTRAL: anything else
+- PROPOSAL: suggesting a completely NEW activity or plan when none is established (lets eat, lets go out, beers on me, anyone down for, how about dinner)
+- RESCHEDULE: suggesting to change the date or time of the existing plan (e.g., "let's make it on Saturday", "push it", "make it tomorrow", "can we do friday instead", "postpond")
+- QUERY: asking specifically about details of the CURRENT PLAN or trip schedule (when is it, where, what time, what's the plan, are we going). Do NOT classify as QUERY if they are asking about random things (e.g. physical objects, questions unrelated to hanging out) - those must be OFF_TOPIC.
+- NEUTRAL: unrecognized language, meaning or some thing that you can not realy understand or vague response or anything else talking about the plan but not confirming or denying or asking a specific query (still on-topic).
+- OFF_TOPIC: talking about unrelated subjects
 
 If CONFIRMING: enthusiastic and encouraging response (max 12 words)
 If EXCUSE: very funny sarcastic and roasting response (max 15 words)
@@ -154,7 +155,7 @@ For PROPOSAL or RESCHEDULE, also extract the suggested date/time if mentioned (e
 
 Return ONLY JSON:
 {
-  "intent": "CONFIRMING|EXCUSE|PROPOSAL|RESCHEDULE|QUERY|NEUTRAL",
+  "intent": "CONFIRMING|EXCUSE|PROPOSAL|RESCHEDULE|QUERY|NEUTRAL|OFF_TOPIC",
   "response": "your funny or helpful response",
   "activity": "clean short activity name (e.g., 'Beers', 'Movie Night', 'Gym') - PROPOSAL only",
   "extracted_date": "extracted date/time (PROPOSAL/RESCHEDULE only, e.g., 'next Tuesday', 'tomorrow at 8pm')"
@@ -176,11 +177,12 @@ function parseResponse(text) {
           "RESCHEDULE",
           "QUERY",
           "NEUTRAL",
+          "OFF_TOPIC",
         ].includes(parsed.intent)
       ) {
         return {
           intent: parsed.intent,
-          response: parsed.response.substring(0, 150),
+          response: parsed.response ? parsed.response.substring(0, 150) : "",
           activity: parsed.activity,
           extracted_date: parsed.extracted_date,
         };
@@ -203,11 +205,14 @@ function parseResponse(text) {
               "RESCHEDULE",
               "QUERY",
               "NEUTRAL",
+              "OFF_TOPIC",
             ].includes(parsed.intent)
           ) {
             return {
               intent: parsed.intent,
-              response: parsed.response.substring(0, 150),
+              response: parsed.response
+                ? parsed.response.substring(0, 150)
+                : "",
               activity: parsed.activity,
               extracted_date: parsed.extracted_date,
             };
@@ -254,6 +259,21 @@ function getSmartFallback(message, userName) {
   }
 
   if (
+    lowerMsg.includes("push") ||
+    lowerMsg.includes("reschedule") ||
+    lowerMsg.includes("instead") ||
+    lowerMsg.includes("can we do") ||
+    lowerMsg.includes("make it on") ||
+    lowerMsg.includes("delay") ||
+    lowerMsg.includes("move it to")
+  ) {
+    return {
+      intent: "RESCHEDULE",
+      response: "A date change? Let me ask the others. 🤔",
+    };
+  }
+
+  if (
     lowerMsg.includes("let") ||
     lowerMsg.includes("lets") ||
     lowerMsg.includes("how about") ||
@@ -270,18 +290,6 @@ function getSmartFallback(message, userName) {
     return {
       intent: "PROPOSAL",
       response: getRandomFromArray(PROPOSAL_DETECT_RESPONSES, userName),
-    };
-  }
-
-  if (
-    lowerMsg.includes("push") ||
-    lowerMsg.includes("reschedule") ||
-    lowerMsg.includes("tomorrow instead") ||
-    lowerMsg.includes("can we do")
-  ) {
-    return {
-      intent: "RESCHEDULE",
-      response: "A date change? Let me ask the others. 🤔",
     };
   }
 
@@ -305,8 +313,8 @@ function getSmartFallback(message, userName) {
 
 function fallbackResponse() {
   return {
-    intent: "NEUTRAL",
-    response: "Got it! 👍",
+    intent: "OFF_TOPIC",
+    response: "",
   };
 }
 
