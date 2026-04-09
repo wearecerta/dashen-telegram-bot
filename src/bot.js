@@ -59,16 +59,17 @@ bot.start(async (ctx) => {
   ]);
 
   const welcomeMessage =
-    `🎉 *Welcome to Dashen Gather Bot, ${escapeMarkdown(name)}!* 🎉\n\n` +
+    `🎉 *Welcome to Dashen Gather, ${escapeMarkdown(name)}!* 🎉\n\n` +
+    `*I help turn group plans into actual gatherings.*\n\n` +
     `*What I can do:*\n` +
-    `• 🎯 Detect activity suggestions\n` +
-    `• ✅ Track attendance\n` +
-    `• 😄 Funny responses\n` +
-    `• 📅 Daily reminders\n\n` +
+    `• Set your event and countdown\n` +
+    `• Respond to excuses with nudges\n` +
+    `• Keep the group aligned\n\n` +
     `*Get started:*\n` +
-    `1️⃣ Add me to group\n` +
-    `2️⃣ Make me admin\n` +
-    `3️⃣ Say "let's eat"`;
+    `1️⃣ Add me to your group\n` +
+    `2️⃣ Set the event date\n` +
+    `3️⃣ Start gathering\n\n` +
+    `#GenuinelyGather`;
 
   await ctx.reply(welcomeMessage, {
     parse_mode: "Markdown",
@@ -217,17 +218,17 @@ bot.on("callback_query", async (ctx) => {
         if (!pollVotes.has(pollNoKey)) {
           pollVotes.set(pollNoKey, new Set());
         }
-        
+
         const noVotes = pollVotes.get(pollNoKey);
-        
+
         if (noVotes.has(tgId)) {
           await ctx.answerCbQuery("ℹ️ You already voted NO!");
           return;
         }
-        
+
         noVotes.add(tgId);
         await ctx.answerCbQuery("👎 You voted NO.");
-        
+
         if (message && message.text) {
           try {
             await ctx.editMessageText(message.text + `\n• ${userName} disagreed`, {
@@ -331,7 +332,7 @@ bot.on("new_chat_members", async (ctx) => {
 
 bot.catch((err, ctx) => {
   console.error("Bot error:", err);
-  ctx.reply("An error occurred. Please try again later.").catch(() => {});
+  ctx.reply("An error occurred. Please try again later.").catch(() => { });
 });
 
 bot.command("event", handleEvent);
